@@ -1,0 +1,19 @@
+[package]
+name = "prise-note-rapide"
+version = "0.1.0"
+edition = "2021"
+description = "Prise de note rapide en ligne de commande, exportable vers frise-chronologique"
+
+[[bin]]
+name = "note"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+dirs = "6"
+anyhow = "1"
