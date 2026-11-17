@@ -1,5 +1,7 @@
 # note — prise de note rapide en ligne de commande
 
+[![CI](https://github.com/MrAuGIR/PriseDeNoteRapide/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MrAuGIR/PriseDeNoteRapide/actions/workflows/ci.yml)
+
 Capturer une information à la volée depuis un terminal déjà ouvert, sans quitter le clavier :
 
 ```bash
@@ -12,7 +14,7 @@ exportée vers [frise-chronologique](../Rust/frise-chronologique).
 ## Installation
 
 ```bash
-git clone <url> PriseNoteRapide && cd PriseNoteRapide
+git clone git@github.com:MrAuGIR/PriseDeNoteRapide.git PriseNoteRapide && cd PriseNoteRapide
 ./install.sh
 ```
 
@@ -24,13 +26,13 @@ complétions bash et zsh.
 ```bash
 sudo apt install build-essential            # prérequis de compilation
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # si rustup absent
-git clone <url> && cd PriseNoteRapide && ./install.sh
+git clone git@github.com:MrAuGIR/PriseDeNoteRapide.git PriseNoteRapide && cd PriseNoteRapide && ./install.sh
 ```
 
 Ou directement, sans cloner :
 
 ```bash
-cargo install --git <url>
+cargo install --git https://github.com/MrAuGIR/PriseDeNoteRapide
 ```
 
 ### Sans Rust sur la machine cible
@@ -171,8 +173,52 @@ sans faire perdre le reste du fichier.
 ## Développement
 
 ```bash
-cargo test          # dont les tests qui verrouillent la compatibilité du format frise
-cargo clippy --all-targets
+cargo test          # tests unitaires + tests d'intégration CLI (tests/cli.rs)
+./scripts/ci.sh     # rejoue la CI en local : fmt, clippy, tests, couverture ≥ 70 %
+```
+
+La couverture nécessite `cargo-llvm-cov` :
+
+```bash
+rustup component add llvm-tools-preview
+cargo install cargo-llvm-cov
+cargo llvm-cov --open          # rapport HTML
+```
+
+Les tests d'intégration lancent le vrai binaire dans un répertoire temporaire via `NOTE_DIR` :
+ils ne touchent jamais aux notes réelles.
+
+### Flux git et CI
+
+- `main` : branche stable, **modifiée uniquement par Pull Request** (depuis `develop`).
+- `develop` : intégration ; les branches de travail (`feature/…`, `fix/…`) en partent et y
+  reviennent par PR.
+- `.github/workflows/ci.yml` tourne sur chaque push et chaque PR vers `main` / `develop` :
+
+  | job        | vérifie                                                     |
+  |------------|-------------------------------------------------------------|
+  | `fmt`      | `cargo fmt --check`                                         |
+  | `clippy`   | `cargo clippy --all-targets -- -D warnings`                 |
+  | `test`     | `cargo test --all-targets --locked`                         |
+  | `coverage` | `cargo llvm-cov`, échoue sous 70 % de lignes (rapport lcov en artifact) |
+  | `audit`    | `cargo audit` (vulnérabilités connues des dépendances)      |
+
+Protection de `main` (à faire une fois, par le propriétaire du dépôt) : *Settings → Branches →
+Add branch ruleset* sur `main`, cocher « Require a pull request before merging » et « Require
+status checks to pass » avec `fmt`, `clippy`, `test`, `coverage`, `audit`. Ou avec `gh` :
+
+```bash
+gh api -X PUT repos/MrAuGIR/PriseDeNoteRapide/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": { "strict": true,
+    "contexts": ["fmt", "clippy", "test", "coverage", "audit"] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": { "required_approving_review_count": 0 },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
 ```
 
 Le module `src/export/frise.rs` contient, dans ses tests, une **copie conforme** de la struct

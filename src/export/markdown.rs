@@ -33,3 +33,60 @@ pub fn render(notes: &[Note]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Local, NaiveDateTime, TimeZone};
+
+    fn note(date_heure: &str, texte: &str, cat: Option<&str>, tags: &[&str]) -> Note {
+        let ndt = NaiveDateTime::parse_from_str(date_heure, "%Y-%m-%d %H:%M").unwrap();
+        let dt = Local.from_local_datetime(&ndt).unwrap().fixed_offset();
+        Note::new(
+            dt,
+            texte.into(),
+            None,
+            cat.map(String::from),
+            tags.iter().map(|t| t.to_string()).collect(),
+        )
+    }
+
+    #[test]
+    fn aucune_note_donne_juste_le_titre() {
+        assert_eq!(render(&[]), "# Notes\n");
+    }
+
+    #[test]
+    fn notes_groupees_par_jour() {
+        let notes = vec![
+            note("2026-06-08 09:00", "a", None, &[]),
+            note("2026-06-08 14:30", "b", None, &[]),
+            note("2026-06-09 10:00", "c", None, &[]),
+        ];
+        let md = render(&notes);
+        assert_eq!(md.matches("\n## ").count(), 2);
+        assert!(md.contains("## 2026-06-08"));
+        assert!(md.contains("## 2026-06-09"));
+        assert!(md.contains("### 09h00 — a"));
+        assert!(md.contains("### 14h30 — b"));
+        assert!(md.find("2026-06-08").unwrap() < md.find("2026-06-09").unwrap());
+    }
+
+    #[test]
+    fn metadonnees_categorie_et_tags() {
+        let notes = vec![note("2026-06-08 09:00", "x", Some("Projets"), &["a", "b"])];
+        let md = render(&notes);
+        assert!(md.contains("*catégorie : Projets · tags : a, b*"));
+
+        let notes = vec![note("2026-06-08 09:00", "x", None, &["a"])];
+        assert!(render(&notes).contains("*tags : a*"));
+    }
+
+    #[test]
+    fn sans_metadonnees_pas_de_ligne_en_italique() {
+        let notes = vec![note("2026-06-08 09:00", "ligne 1\nligne 2", None, &[])];
+        let md = render(&notes);
+        assert!(!md.contains('*'));
+        assert!(md.contains("ligne 1\nligne 2\n"));
+    }
+}

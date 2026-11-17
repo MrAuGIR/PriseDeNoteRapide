@@ -179,6 +179,53 @@ mod tests {
         fs::remove_dir_all(&d).unwrap();
     }
 
+    /// Un seul test touche `NOTE_DIR` : les tests tournent en parallèle et partagent l'env.
+    #[test]
+    fn data_path_respecte_note_dir() {
+        let avant = std::env::var_os("NOTE_DIR");
+
+        std::env::set_var("NOTE_DIR", "/tmp/pnr-ailleurs");
+        assert_eq!(
+            data_path().unwrap(),
+            PathBuf::from("/tmp/pnr-ailleurs/notes.jsonl")
+        );
+
+        // Vide : on retombe sur le répertoire de données local.
+        std::env::set_var("NOTE_DIR", "");
+        let p = data_path().unwrap();
+        assert!(p.ends_with("prise-note-rapide/notes.jsonl"));
+
+        match avant {
+            Some(v) => std::env::set_var("NOTE_DIR", v),
+            None => std::env::remove_var("NOTE_DIR"),
+        }
+    }
+
+    #[test]
+    fn rewrite_cree_le_repertoire_parent() {
+        let d = tmpdir("rewrite-parent");
+        let p = d.join("sous").join("notes.jsonl");
+        rewrite(&p, &[note("x")]).unwrap();
+        assert_eq!(read_all(&p).unwrap().len(), 1);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn lignes_vides_ignorees() {
+        let d = tmpdir("vides");
+        let p = d.join("notes.jsonl");
+        append(&p, &note("a")).unwrap();
+        OpenOptions::new()
+            .append(true)
+            .open(&p)
+            .unwrap()
+            .write_all(b"\n   \n")
+            .unwrap();
+        append(&p, &note("b")).unwrap();
+        assert_eq!(read_all(&p).unwrap().len(), 2);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
     #[test]
     fn prefixe_ambigu_signale() {
         let notes = vec![note("a"), note("b")];
@@ -186,5 +233,18 @@ mod tests {
         assert!(resolve_id_prefix(&notes, "zzzzzzzz").is_err());
         let court = notes[0].short_id();
         assert_eq!(resolve_id_prefix(&notes, &court).unwrap(), 0);
+        // Les tirets et la casse de l'UUID complet sont tolérés.
+        let complet = notes[1].id.to_string().to_uppercase();
+        assert_eq!(resolve_id_prefix(&notes, &complet).unwrap(), 1);
+    }
+
+    #[test]
+    fn prefixe_partage_par_plusieurs_notes_est_ambigu() {
+        let mut a = note("a");
+        let mut b = note("b");
+        a.id = uuid::Uuid::parse_str("12345678-0000-4000-8000-000000000001").unwrap();
+        b.id = uuid::Uuid::parse_str("12345678-0000-4000-8000-000000000002").unwrap();
+        let err = resolve_id_prefix(&[a, b], "1234").unwrap_err().to_string();
+        assert!(err.contains("ambigu"), "{err}");
     }
 }
