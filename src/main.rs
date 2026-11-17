@@ -351,3 +351,25 @@ fn cmd_export(path: &Path, args: ExportArgs) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_at_accepte_trois_formats() {
+        let d = parse_at("2026-01-02").unwrap();
+        assert_eq!(d.format("%Y-%m-%d %H:%M").to_string(), "2026-01-02 00:00");
+        let d = parse_at("2026-01-02T10:30").unwrap();
+        assert_eq!(d.format("%Y-%m-%d %H:%M").to_string(), "2026-01-02 10:30");
+        let d = parse_at(" 2026-01-02 10:30 ").unwrap();
+        assert_eq!(d.format("%Y-%m-%d %H:%M").to_string(), "2026-01-02 10:30");
+    }
+
+    #[test]
+    fn parse_at_refuse_le_reste() {
+        assert!(parse_at("demain").is_err());
+        assert!(parse_at("2026-13-01").is_err());
+        assert!(parse_at("").is_err());
+    }
+}
